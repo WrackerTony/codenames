@@ -2,6 +2,50 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  users: defineTable({
+    email: v.string(),
+    passwordHash: v.string(),
+    username: v.string(),
+    points: v.number(), // Points earned from games
+    gamesWon: v.number(),
+    gamesLost: v.number(),
+    createdAt: v.number(),
+    lastLoginAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_username", ["username"]),
+
+  sessions: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_token", ["token"])
+    .index("by_user", ["userId"]),
+
+  friendRequests: defineTable({
+    senderId: v.id("users"),
+    receiverId: v.id("users"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("rejected")
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_receiver", ["receiverId", "status"])
+    .index("by_sender", ["senderId", "status"])
+    .index("by_users", ["senderId", "receiverId"]),
+
+  friends: defineTable({
+    userId1: v.id("users"),
+    userId2: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_user1", ["userId1"])
+    .index("by_user2", ["userId2"]),
+
   rooms: defineTable({
     code: v.string(), // 4-6 character room code
     isPublic: v.boolean(), // true for public matchmaking
@@ -29,6 +73,7 @@ export default defineSchema({
   players: defineTable({
     roomId: v.id("rooms"),
     playerId: v.string(), // Unique player identifier
+    userId: v.optional(v.id("users")), // Link to registered user
     name: v.string(),
     team: v.optional(
       v.union(v.literal("red"), v.literal("blue"), v.literal("spectator"))
@@ -41,7 +86,8 @@ export default defineSchema({
   })
     .index("by_room", ["roomId"])
     .index("by_room_and_team", ["roomId", "team"])
-    .index("by_player_id", ["playerId"]),
+    .index("by_player_id", ["playerId"])
+    .index("by_user", ["userId"]),
 
   games: defineTable({
     roomId: v.id("rooms"),

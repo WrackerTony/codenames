@@ -114,22 +114,6 @@ Each window will be a separate player!
    - Add environment variable: `NEXT_PUBLIC_CONVEX_URL` = your production Convex URL
    - Deploy!
 
-## File Structure Overview
-
-```
-Key Files:
-├── convex/
-│   ├── schema.ts       ← Database tables definition
-│   ├── rooms.ts        ← Create/join room logic
-│   ├── game.ts         ← Game actions (clues, guesses)
-│   └── wordBank.ts     ← Word list (400+ words)
-├── app/
-│   ├── page.tsx        ← Home page (create/join)
-│   ├── lobby/          ← Team selection
-│   ├── game/           ← Main game board
-│   └── components/
-│       └── Chat.tsx    ← Real-time chat
-```
 
 ## Next Steps
 

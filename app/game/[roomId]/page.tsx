@@ -71,8 +71,14 @@ export default function GamePage({
     !isSpymaster && isMyTurn && game.currentClue && game.guessesRemaining > 0;
 
   const handleGiveClue = async () => {
-    if (!clueWord.trim() || clueNumber < 0 || clueNumber > 9) {
-      alert("Please enter a valid clue (1 word and a number 0-9)");
+    if (!clueWord.trim()) {
+      alert("Please enter a valid clue word");
+      return;
+    }
+
+    // Allow 0-9 or 99 (representing ∞)
+    if (clueNumber < 0 || (clueNumber > 9 && clueNumber !== 99)) {
+      alert("Please enter a valid number (0-9 or ∞)");
       return;
     }
 
@@ -347,11 +353,16 @@ export default function GamePage({
                         : "text-blue-400"
                     }
                   >
-                    {game.currentClue.number}
+                    {game.currentClue.number === 99
+                      ? "∞"
+                      : game.currentClue.number}
                   </span>
                 </div>
                 <div className="text-sm text-gray-500 mt-2">
-                  {game.guessesRemaining} guesses remaining
+                  {game.guessesRemaining >= 999
+                    ? "Unlimited"
+                    : game.guessesRemaining}{" "}
+                  guesses remaining
                 </div>
               </div>
               {isMyTurn && !isSpymaster && game.currentClue && (
@@ -385,35 +396,59 @@ export default function GamePage({
               </div>
             </div>
             <div className="text-sm text-gray-400 mb-4">
-              Enter one word and a number (0-9) to tell your team how many cards
-              relate to your clue.
+              Enter one word and a number (0-9, or use 0/∞ for special clues).
             </div>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="text"
-                value={clueWord}
-                onChange={(e) => setClueWord(e.target.value)}
-                placeholder="One word clue (e.g., ANIMAL)"
-                aria-label="Clue word"
-                className="flex-1 px-4 py-3 bg-black border border-gray-900 rounded-lg text-white placeholder-gray-600 focus:ring-2 focus:ring-white/20 focus:border-white/40 transition-all duration-200 text-lg font-medium"
-              />
-              <input
-                type="number"
-                value={clueNumber}
-                onChange={(e) => setClueNumber(parseInt(e.target.value) || 1)}
-                min="0"
-                max="9"
-                aria-label="Number of related words"
-                className="w-28 px-4 py-3 bg-black border border-gray-900 rounded-lg text-white text-center focus:ring-2 focus:ring-white/20 focus:border-white/40 transition-all duration-200 text-lg font-bold"
-              />
-              <button
-                onClick={handleGiveClue}
-                disabled={!clueWord.trim()}
-                className="px-8 py-3 bg-white text-black font-bold rounded-lg hover:bg-gray-200 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Send className="w-5 h-5" />
-                Send Clue
-              </button>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={clueWord}
+                  onChange={(e) => setClueWord(e.target.value)}
+                  placeholder="One word clue (e.g., ANIMAL)"
+                  aria-label="Clue word"
+                  className="flex-1 px-4 py-3 bg-black border border-gray-900 rounded-lg text-white placeholder-gray-600 focus:ring-2 focus:ring-white/20 focus:border-white/40 transition-all duration-200 text-lg font-medium"
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={clueNumber === 99 ? "" : clueNumber}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (!isNaN(val) && val >= 0 && val <= 9) {
+                        setClueNumber(val);
+                      }
+                    }}
+                    min="0"
+                    max="9"
+                    placeholder={clueNumber === 99 ? "∞" : undefined}
+                    aria-label="Number of related words"
+                    className="w-28 px-4 py-3 bg-black border border-gray-900 rounded-lg text-white text-center focus:ring-2 focus:ring-white/20 focus:border-white/40 transition-all duration-200 text-lg font-bold"
+                  />
+                  <button
+                    onClick={handleGiveClue}
+                    disabled={!clueWord.trim()}
+                    className="px-8 py-3 bg-white text-black font-bold rounded-lg hover:bg-gray-200 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Send className="w-5 h-5" />
+                    Send Clue
+                  </button>
+                </div>
+              </div>
+              <div className="flex gap-2 text-xs">
+                <span className="text-gray-500">Quick select:</span>
+                <button
+                  onClick={() => setClueNumber(0)}
+                  className={`px-3 py-1 rounded border transition-all ${clueNumber === 0 ? "bg-yellow-950/50 border-yellow-900/50 text-yellow-400" : "bg-black border-gray-900 text-gray-500 hover:text-gray-300"}`}
+                >
+                  0 (unlimited, non-related)
+                </button>
+                <button
+                  onClick={() => setClueNumber(99)}
+                  className={`px-3 py-1 rounded border transition-all ${clueNumber === 99 ? "bg-purple-950/50 border-purple-900/50 text-purple-400" : "bg-black border-gray-900 text-gray-500 hover:text-gray-300"}`}
+                >
+                  ∞ (all remaining)
+                </button>
+              </div>
             </div>
           </div>
         )}

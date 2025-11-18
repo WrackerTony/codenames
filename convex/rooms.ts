@@ -25,6 +25,7 @@ export const createRoom = mutation({
       v.literal("fr"),
       v.literal("de")
     ),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let code = generateRoomCode();
@@ -45,6 +46,19 @@ export const createRoom = mutation({
     
     const playerId = crypto.randomUUID();
     
+    // Check if user is logged in
+    let userId = undefined;
+    if (args.token) {
+      const session = await ctx.db
+        .query("sessions")
+        .withIndex("by_token", (q) => q.eq("token", args.token!))
+        .first();
+      
+      if (session && session.expiresAt > Date.now()) {
+        userId = session.userId;
+      }
+    }
+    
     const roomId = await ctx.db.insert("rooms", {
       code,
       isPublic: args.isPublic,
@@ -57,6 +71,7 @@ export const createRoom = mutation({
     await ctx.db.insert("players", {
       roomId,
       playerId,
+      userId,
       name: args.playerName,
       isConnected: true,
       lastSeen: Date.now(),
@@ -71,6 +86,7 @@ export const joinRoomByCode = mutation({
   args: {
     code: v.string(),
     playerName: v.string(),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const room = await ctx.db
@@ -88,9 +104,23 @@ export const joinRoomByCode = mutation({
     
     const playerId = crypto.randomUUID();
     
+    // Check if user is logged in
+    let userId = undefined;
+    if (args.token) {
+      const session = await ctx.db
+        .query("sessions")
+        .withIndex("by_token", (q) => q.eq("token", args.token!))
+        .first();
+      
+      if (session && session.expiresAt > Date.now()) {
+        userId = session.userId;
+      }
+    }
+    
     await ctx.db.insert("players", {
       roomId: room._id,
       playerId,
+      userId,
       name: args.playerName,
       isConnected: true,
       lastSeen: Date.now(),

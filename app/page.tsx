@@ -1,20 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import LanguageSelector from "./components/LanguageSelector";
 import { useLanguage } from "./contexts/LanguageContext";
-import { Users, Lock, Hash, Sparkles, Play, Crown } from "lucide-react";
+import { useAuth } from "./contexts/AuthContext";
+import AuthModal from "./components/AuthModal";
+import {
+  Users,
+  Lock,
+  Hash,
+  Sparkles,
+  Play,
+  Crown,
+  LogOut,
+  UserCircle,
+} from "lucide-react";
 
 export default function Home() {
   const router = useRouter();
   const { t, language } = useLanguage();
+  const { user, logout, token } = useAuth();
   const [playerName, setPlayerName] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showRules, setShowRules] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<"login" | "register">(
+    "login"
+  );
+
+  // Auto-fill player name from user account
+  useEffect(() => {
+    if (user) {
+      setPlayerName(user.username);
+    }
+  }, [user]);
 
   const createRoom = useMutation(api.rooms.createRoom);
   const joinRoomByCode = useMutation(api.rooms.joinRoomByCode);
@@ -35,6 +59,7 @@ export default function Home() {
         isPublic: false,
         language,
         playerName: playerName.trim(),
+        token: token || undefined,
       });
 
       sessionStorage.setItem("playerId", result.playerId);
@@ -66,6 +91,7 @@ export default function Home() {
       const result = await joinRoomByCode({
         code: roomCode.trim().toUpperCase(),
         playerName: playerName.trim(),
+        token: token || undefined,
       });
 
       sessionStorage.setItem("playerId", result.playerId);
@@ -177,27 +203,81 @@ export default function Home() {
               <p className="text-xs text-gray-500">{t("home.subtitle")}</p>
             </div>
           </div>
-          <LanguageSelector />
+          <div className="flex items-center gap-4">
+            {user ? (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => router.push("/profile")}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <UserCircle className="w-5 h-5" />
+                  <div className="text-left">
+                    <div className="text-sm font-medium">{user.username}</div>
+                    <div className="text-xs text-gray-400">
+                      {user.points} pts
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={logout}
+                  className="p-2 text-gray-400 hover:text-white transition-colors"
+                  aria-label="Logout"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setAuthModalMode("login");
+                    setShowAuthModal(true);
+                  }}
+                  className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
+                >
+                  Login
+                </button>
+                <button
+                  onClick={() => {
+                    setAuthModalMode("register");
+                    setShowAuthModal(true);
+                  }}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                >
+                  Register
+                </button>
+              </div>
+            )}
+            <LanguageSelector />
+          </div>
         </div>
       </header>
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        initialMode={authModalMode}
+      />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-gray-950 border border-gray-900 rounded-xl p-6 hover:border-gray-800 transition-all duration-300">
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-400 mb-3">
-                <Users className="w-4 h-4" />
-                {t("home.enterName")}
-              </label>
-              <input
-                type="text"
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                placeholder={t("home.enterName")}
-                className="w-full px-4 py-3 bg-black border border-gray-900 rounded-lg focus:ring-2 focus:ring-white/20 focus:border-white/40 text-white placeholder-gray-600 transition-all duration-200"
-                disabled={loading}
-              />
-            </div>
+            {!user && (
+              <div className="bg-gray-950 border border-gray-900 rounded-xl p-6 hover:border-gray-800 transition-all duration-300">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-400 mb-3">
+                  <Users className="w-4 h-4" />
+                  {t("home.enterName")}
+                </label>
+                <input
+                  type="text"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  placeholder={t("home.enterName")}
+                  className="w-full px-4 py-3 bg-black border border-gray-900 rounded-lg focus:ring-2 focus:ring-white/20 focus:border-white/40 text-white placeholder-gray-600 transition-all duration-200"
+                  disabled={loading}
+                />
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-950/30 border border-red-900/50 text-red-400 px-4 py-3 rounded-xl backdrop-blur-sm">
@@ -339,27 +419,182 @@ export default function Home() {
         </div>
 
         <div className="mt-8 bg-gray-950 border border-gray-900 rounded-xl p-6">
-          <h3 className="font-semibold text-white mb-4">How to Play</h3>
-          <div className="grid sm:grid-cols-3 gap-4 text-sm text-gray-400">
-            <div>
-              <div className="w-8 h-8 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center justify-center mb-2">
-                <span className="text-red-400 font-bold">1</span>
+          <button
+            onClick={() => setShowRules(!showRules)}
+            className="w-full flex items-center justify-between text-white font-semibold mb-4 hover:text-gray-300 transition-colors"
+          >
+            <h3 className="text-lg">{t("howToPlay.title")}</h3>
+            <span className="text-2xl">{showRules ? "−" : "+"}</span>
+          </button>
+
+          {showRules && (
+            <div className="space-y-6 text-sm text-gray-300">
+              {/* Objective */}
+              <div className="bg-linear-to-r from-blue-950/50 to-red-950/50 border border-gray-800 rounded-lg p-5">
+                <h4 className="font-bold text-white mb-2 text-base">
+                  🎯 {t("howToPlay.objective")}
+                </h4>
+                <p className="text-gray-300">{t("howToPlay.objectiveDesc")}</p>
               </div>
-              <p>Divide into two teams (Red & Blue)</p>
-            </div>
-            <div>
-              <div className="w-8 h-8 bg-blue-500/20 border border-blue-500/30 rounded-lg flex items-center justify-center mb-2">
-                <span className="text-blue-400 font-bold">2</span>
+
+              {/* Detailed Game Guide Header */}
+              <div className="border-t border-gray-800 pt-6">
+                <h4 className="font-bold text-white mb-4 text-base">
+                  📖 {t("howToPlay.detailedGuide")}
+                </h4>
+
+                {/* Step-by-Step Instructions */}
+                <div className="space-y-4">
+                  {/* Step 1: Team Formation */}
+                  <div className="bg-black/30 rounded-lg p-4 border border-gray-900">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center justify-center shrink-0 mt-1">
+                        <span className="text-red-400 font-bold">1</span>
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-white mb-2">
+                          {t("howToPlay.step1")}
+                        </h5>
+                        <p className="text-gray-400 leading-relaxed">
+                          {t("howToPlay.step1Desc")}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 2: Understanding the Board */}
+                  <div className="bg-black/30 rounded-lg p-4 border border-gray-900">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-blue-500/20 border border-blue-500/30 rounded-lg flex items-center justify-center shrink-0 mt-1">
+                        <span className="text-blue-400 font-bold">2</span>
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-white mb-2">
+                          {t("howToPlay.step2")}
+                        </h5>
+                        <p className="text-gray-400 leading-relaxed">
+                          {t("howToPlay.step2Desc")}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 3: Giving Clues */}
+                  <div className="bg-black/30 rounded-lg p-4 border border-gray-900">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-purple-500/20 border border-purple-500/30 rounded-lg flex items-center justify-center shrink-0 mt-1">
+                        <span className="text-purple-400 font-bold">3</span>
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-white mb-2">
+                          {t("howToPlay.step3")}
+                        </h5>
+                        <p className="text-gray-400 leading-relaxed">
+                          {t("howToPlay.step3Desc")}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 4: Making Guesses */}
+                  <div className="bg-black/30 rounded-lg p-4 border border-gray-900">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-green-500/20 border border-green-500/30 rounded-lg flex items-center justify-center shrink-0 mt-1">
+                        <span className="text-green-400 font-bold">4</span>
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-white mb-2">
+                          {t("howToPlay.step4")}
+                        </h5>
+                        <p className="text-gray-400 leading-relaxed">
+                          {t("howToPlay.step4Desc")}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <p>Each team picks one Spymaster</p>
-            </div>
-            <div>
-              <div className="w-8 h-8 bg-purple-500/20 border border-purple-500/30 rounded-lg flex items-center justify-center mb-2">
-                <span className="text-purple-400 font-bold">3</span>
+
+              {/* Special Number Options */}
+              <div className="bg-yellow-950/30 border border-yellow-900/50 rounded-lg p-5">
+                <h4 className="font-bold text-yellow-400 mb-3 flex items-center gap-2 text-base">
+                  <span className="text-xl">✨</span>
+                  {t("howToPlay.specialNumbers")}
+                </h4>
+                <div className="space-y-3 text-gray-300">
+                  <div className="bg-black/40 rounded p-3 border border-yellow-900/30">
+                    <p className="leading-relaxed whitespace-pre-line">
+                      {t("howToPlay.numberZero")}
+                    </p>
+                  </div>
+                  <div className="bg-black/40 rounded p-3 border border-yellow-900/30">
+                    <p className="leading-relaxed whitespace-pre-line">
+                      {t("howToPlay.numberInfinite")}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <p>Guess words based on clues</p>
+
+              {/* Bonus Guess */}
+              <div className="bg-cyan-950/30 border border-cyan-900/50 rounded-lg p-5">
+                <h4 className="font-bold text-cyan-400 mb-2 text-base">
+                  🎁 {t("howToPlay.bonusGuess")}
+                </h4>
+                <p className="text-gray-300 leading-relaxed">
+                  {t("howToPlay.bonusGuessDesc")}
+                </p>
+              </div>
+
+              {/* Examples */}
+              <div className="bg-purple-950/30 border border-purple-900/50 rounded-lg p-5">
+                <h4 className="font-bold text-purple-400 mb-3 text-base">
+                  💡 {t("howToPlay.examples")}
+                </h4>
+                <ul className="space-y-2">
+                  <li className="flex items-start gap-2 text-gray-300">
+                    <span className="text-purple-400 mt-1">•</span>
+                    <span>{t("howToPlay.example1")}</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-gray-300">
+                    <span className="text-purple-400 mt-1">•</span>
+                    <span>{t("howToPlay.example2")}</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-gray-300">
+                    <span className="text-purple-400 mt-1">•</span>
+                    <span>{t("howToPlay.example3")}</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-gray-300">
+                    <span className="text-purple-400 mt-1">•</span>
+                    <span>{t("howToPlay.example4")}</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-gray-300">
+                    <span className="text-purple-400 mt-1">•</span>
+                    <span>{t("howToPlay.example5")}</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Winning & Assassin Card */}
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="bg-green-950/30 border border-green-900/50 rounded-lg p-4">
+                  <h4 className="font-bold text-green-400 mb-2">
+                    ✅ {t("howToPlay.winning")}
+                  </h4>
+                  <p className="text-gray-300">
+                    {t("howToPlay.winCondition1")}
+                  </p>
+                </div>
+                <div className="bg-red-950/30 border border-red-900/50 rounded-lg p-4">
+                  <h4 className="font-bold text-red-400 mb-2">
+                    💀 {t("howToPlay.assassinCard")}
+                  </h4>
+                  <p className="text-gray-300">
+                    {t("howToPlay.loseCondition")}
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
     </div>

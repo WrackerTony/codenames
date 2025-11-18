@@ -45,8 +45,9 @@ export const giveClue = mutation({
       throw new Error("Clue word cannot be empty");
     }
     
-    if (args.number < 0 || args.number > 9) {
-      throw new Error("Clue number must be between 0 and 9");
+    // Allow 0-9 for normal clues, 99 for infinite (∞)
+    if (args.number < 0 || (args.number > 9 && args.number !== 99)) {
+      throw new Error("Clue number must be 0-9 or ∞ (infinite)");
     }
     
     const clue = {
@@ -55,9 +56,16 @@ export const giveClue = mutation({
       givenBy: args.playerId,
     };
     
+    // For 0: unlimited guesses (but operatives cannot pick words related to the clue)
+    // For 99 (∞): unlimited guesses
+    // For normal numbers: number + 1 guesses
+    const guessesRemaining = (args.number === 0 || args.number === 99) 
+      ? 999 // Effectively unlimited
+      : args.number + 1;
+    
     await ctx.db.patch(game._id, {
       currentClue: clue,
-      guessesRemaining: args.number + 1, // Can guess number + 1
+      guessesRemaining: guessesRemaining,
       clueHistory: [
         ...game.clueHistory,
         {
@@ -167,11 +175,38 @@ export const makeGuess = mutation({
       currentClue: newGuessesRemaining === 0 ? undefined : game.currentClue,
     });
     
-    // Update room status if game is over
+    // Update room status and award points if game is over
     if (winner) {
       await ctx.db.patch(args.roomId, {
         status: "finished",
       });
+
+      // Award points to winning team's registered users
+      const players = await ctx.db
+        .query("players")
+        .withIndex("by_room", (q) => q.eq("roomId", args.roomId))
+        .collect();
+
+      for (const player of players) {
+        if (player.userId) {
+          const user = await ctx.db.get(player.userId);
+          if (user) {
+            if (player.team === winner) {
+              // Winner gets 10 points
+              await ctx.db.patch(player.userId, {
+                points: user.points + 10,
+                gamesWon: user.gamesWon + 1,
+              });
+            } else if (player.team && player.team !== "spectator") {
+              // Loser gets 3 points for participation
+              await ctx.db.patch(player.userId, {
+                points: user.points + 3,
+                gamesLost: user.gamesLost + 1,
+              });
+            }
+          }
+        }
+      }
     }
   },
 });
