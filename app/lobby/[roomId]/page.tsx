@@ -105,6 +105,8 @@ export default function LobbyPage({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const currentPlayer = players.find((p) => p.playerId === playerId);
+
   if (!currentPlayer) {
     return <LoadingSpinner />;
   }
