@@ -1,11 +1,10 @@
 import { internalMutation } from "./_generated/server";
-import { Doc, Id } from "./_generated/dataModel";
 
 // Migration to delete all rooms without language field
 export const deleteRoomsWithoutLanguage = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const allRooms = await ctx.db.query("rooms").collect() as any[];
+    const allRooms = await ctx.db.query("rooms").collect();
     let deletedCount = 0;
     
     for (const room of allRooms) {

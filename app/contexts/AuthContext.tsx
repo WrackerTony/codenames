@@ -35,7 +35,12 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("authToken");
+    }
+    return null;
+  });
   const [isLoading, setIsLoading] = useState(true);
 
   const user = useQuery(api.auth.getCurrentUser, token ? { token } : "skip");
@@ -45,11 +50,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logoutMutation = useMutation(api.auth.logout);
 
   useEffect(() => {
-    // Load token from localStorage on mount
-    const savedToken = localStorage.getItem("authToken");
-    if (savedToken) {
-      setToken(savedToken);
-    }
     setIsLoading(false);
   }, []);
 

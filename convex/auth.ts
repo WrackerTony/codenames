@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import bcrypt from "bcryptjs";
-import { Id } from "./_generated/dataModel";
 
 // Helper function to validate email format
 function isValidEmail(email: string): boolean {

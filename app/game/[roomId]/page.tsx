@@ -11,7 +11,6 @@ import LanguageSelector from "@/app/components/LanguageSelector";
 import { useLanguage } from "@/app/contexts/LanguageContext";
 import {
   Crown,
-  Users,
   Sparkles,
   ArrowLeft,
   Send,
@@ -29,7 +28,7 @@ export default function GamePage({
   const { t } = useLanguage();
   const { roomId: roomIdString } = use(params);
   const roomId = roomIdString as Id<"rooms">;
-  const [playerId, setPlayerId] = useState("");
+  const [playerId, setPlayerId] = useState<string | null>(null);
   const [clueWord, setClueWord] = useState("");
   const [clueNumber, setClueNumber] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -43,9 +42,9 @@ export default function GamePage({
     const id = sessionStorage.getItem("playerId");
     if (!id) {
       router.push("/");
-      return;
+    } else {
+      setPlayerId(id);
     }
-    setPlayerId(id);
   }, [router]);
 
   // Wait for playerId to be loaded from sessionStorage
@@ -66,7 +65,6 @@ export default function GamePage({
 
   const isSpymaster = currentPlayer.role === "spymaster";
   const isMyTurn = currentPlayer.team === game.currentTurn;
-  const canGiveClue = isSpymaster && isMyTurn && !game.currentClue;
   const canGuess =
     !isSpymaster && isMyTurn && game.currentClue && game.guessesRemaining > 0;
 

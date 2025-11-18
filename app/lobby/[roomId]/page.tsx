@@ -28,14 +28,8 @@ export default function LobbyPage({
   const { t } = useLanguage();
   const { roomId: roomIdString } = use(params);
   const roomId = roomIdString as Id<"rooms">;
-  const [playerId, setPlayerId] = useState("");
+  const [playerId, setPlayerId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [selectedTeam, setSelectedTeam] = useState<
-    "red" | "blue" | "spectator" | undefined
-  >();
-  const [selectedRole, setSelectedRole] = useState<
-    "spymaster" | "operative" | undefined
-  >();
 
   const roomData = useQuery(api.rooms.getRoom, roomId ? { roomId } : "skip");
   const updateTeamRole = useMutation(api.rooms.updatePlayerTeamRole);
@@ -45,9 +39,9 @@ export default function LobbyPage({
     const id = sessionStorage.getItem("playerId");
     if (!id) {
       router.push("/");
-      return;
+    } else {
+      setPlayerId(id);
     }
-    setPlayerId(id);
   }, [router]);
 
   useEffect(() => {
@@ -56,7 +50,7 @@ export default function LobbyPage({
     }
   }, [roomData, roomId, router]);
 
-  if (!roomData) {
+  if (!roomData || !playerId) {
     return <LoadingSpinner />;
   }
 
@@ -81,6 +75,7 @@ export default function LobbyPage({
     team: "red" | "blue" | "spectator",
     role: "spymaster" | "operative"
   ) => {
+    if (!playerId) return;
     try {
       await updateTeamRole({
         playerId,
@@ -88,8 +83,6 @@ export default function LobbyPage({
         team,
         role,
       });
-      setSelectedTeam(team);
-      setSelectedRole(role);
     } catch (error) {
       alert(
         error instanceof Error ? error.message : "Failed to update team/role"
@@ -98,6 +91,7 @@ export default function LobbyPage({
   };
 
   const handleStartGame = async () => {
+    if (!playerId) return;
     try {
       await startGame({ roomId, playerId });
     } catch (error) {
@@ -111,7 +105,9 @@ export default function LobbyPage({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const currentPlayer = players.find((p) => p.playerId === playerId);
+  if (!currentPlayer) {
+    return <LoadingSpinner />;
+  }
 
   return (
     <div className="min-h-screen bg-black text-white">
