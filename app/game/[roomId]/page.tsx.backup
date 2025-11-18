@@ -1,0 +1,283 @@
+"use client";
+
+import { useEffect, useState, use } from "react";
+import { useRouter } from "next/navigation";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+import Chat from "@/app/components/Chat";
+import LoadingSpinner from "@/app/components/LoadingSpinner";
+
+export default function GamePage({ params }: { params: Promise<{ roomId: string }> }) {
+  const router = useRouter();
+  const { roomId: roomIdString } = use(params);
+  const roomId = roomIdString as Id<"rooms">;
+  const [playerId, setPlayerId] = useState("");
+  const [clueWord, setClueWord] = useState("");
+  const [clueNumber, setClueNumber] = useState(1);
+  
+  const roomData = useQuery(api.rooms.getRoom, { roomId });
+  const giveClue = useMutation(api.game.giveClue);
+  const makeGuess = useMutation(api.game.makeGuess);
+  const endTurn = useMutation(api.game.endTurn);
+
+  useEffect(() => {
+    const id = localStorage.getItem("playerId");
+    if (!id) {
+      router.push("/");
+      return;
+    }
+    setPlayerId(id);
+  }, [router]);
+
+  if (!roomData || !roomData.game) {
+    return <LoadingSpinner />;
+  }
+
+  const { room, players, game } = roomData;
+  const currentPlayer = players.find((p) => p.name === playerId || p._id === playerId);
+  
+  if (!currentPlayer) {
+    return <LoadingSpinner />;
+  }
+
+  const isSpymaster = currentPlayer.role === "spymaster";
+  const isMyTurn = currentPlayer.team === game.currentTurn;
+  const canGiveClue = isSpymaster && isMyTurn && !game.currentClue;
+  const canGuess = !isSpymaster && isMyTurn && game.currentClue && game.guessesRemaining > 0;
+
+  const handleGiveClue = async () => {
+    if (!clueWord.trim() || clueNumber < 0 || clueNumber > 9) {
+      alert("Please enter a valid clue (1 word and a number 0-9)");
+      return;
+    }
+
+    try {
+      await giveClue({
+        roomId,
+        playerId,
+        word: clueWord.trim(),
+        number: clueNumber,
+      });
+      setClueWord("");
+      setClueNumber(1);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to give clue");
+    }
+  };
+
+  const handleGuess = async (wordIndex: number) => {
+    if (!canGuess) return;
+
+    try {
+      await makeGuess({
+        roomId,
+        playerId,
+        wordIndex,
+      });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to make guess");
+    }
+  };
+
+  const handleEndTurn = async () => {
+    try {
+      await endTurn({ roomId, playerId });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to end turn");
+    }
+  };
+
+  const getCardColor = (card: typeof game.board[0]) => {
+    // Spymasters see all colors
+    if (isSpymaster || card.revealed) {
+      switch (card.color) {
+        case "red":
+          return "bg-red-600 text-white border-red-500";
+        case "blue":
+          return "bg-blue-600 text-white border-blue-500";
+        case "neutral":
+          return "bg-amber-700 text-gray-100 border-amber-600";
+        case "assassin":
+          return "bg-gray-950 text-white border-gray-800";
+      }
+    }
+    // Operatives see dark cards until revealed
+    return card.revealed
+      ? "bg-gray-700 text-gray-400 border-gray-600"
+      : "bg-gray-800 text-gray-100 border-gray-700 hover:bg-gray-700 cursor-pointer";
+  };
+
+  const getCardOpacity = (card: typeof game.board[0]) => {
+    return card.revealed ? "opacity-60" : "";
+  };
+
+  // Winner screen
+  if (game.winner) {
+    const winnerTeam = game.winner === "assassin" 
+      ? game.currentTurn === "red" ? "blue" : "red"
+      : game.winner;
+    
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-8 max-w-2xl w-full text-center">
+          <h1 className="text-5xl font-bold mb-4">
+            {winnerTeam === "red" ? "🔴" : "🔵"} <span className={winnerTeam === "red" ? "text-red-400" : "text-blue-400"}>{winnerTeam.toUpperCase()} TEAM WINS!</span>
+          </h1>
+          {game.winner === "assassin" && (
+            <p className="text-xl text-gray-400 mb-6">
+              The assassin was revealed! 💀
+            </p>
+          )}
+          <p className="text-xl text-gray-400 mb-8">
+            Game Over
+          </p>
+          <button
+            onClick={() => router.push("/")}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-xl"
+          >
+            Return to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-950 p-4">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-xl p-6 mb-6">
+          <div className="flex flex-wrap justify-between items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold mb-2 text-white">CODENAMES</h1>
+              <div className="text-sm text-gray-400">
+                Room: <span className="font-bold text-gray-300">{room.code}</span> | 
+                You are: <span className="font-bold text-gray-300">{currentPlayer.name}</span> <span className={currentPlayer.team === "red" ? "text-red-400" : "text-blue-400"}>({currentPlayer.team} {currentPlayer.role})</span>
+              </div>
+            </div>
+            <div className="flex gap-4">
+              <div className="text-center">
+                <div className="text-sm text-gray-400">Red Team</div>
+                <div className="text-3xl font-bold text-red-400">{game.redRemaining}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-gray-400">Blue Team</div>
+                <div className="text-3xl font-bold text-blue-400">{game.blueRemaining}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Turn Info */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-lg p-6 mb-6">
+          <div className="flex flex-wrap justify-between items-center gap-4">
+            <div>
+              <div className="text-lg font-semibold text-gray-200">
+                Current Turn: {" "}
+                <span className={game.currentTurn === "red" ? "text-red-400" : "text-blue-400"}>
+                  {game.currentTurn.toUpperCase()} TEAM
+                </span>
+              </div>
+              {game.currentClue && (
+                <div className="text-lg mt-2 text-gray-300">
+                  Clue: <span className="font-bold text-white">{game.currentClue.word} {game.currentClue.number}</span>
+                  {" "}| Guesses remaining: <span className="font-bold text-white">{game.guessesRemaining}</span>
+                </div>
+              )}
+            </div>
+            {isMyTurn && game.currentClue && (
+              <button
+                onClick={handleEndTurn}
+                className="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg"
+              >
+                End Turn
+              </button>
+            )}
+          </div>
+
+          {/* Clue Input for Spymaster */}
+          {canGiveClue && (
+            <div className="mt-4 p-4 bg-yellow-900/20 border-2 border-yellow-700/50 rounded-lg">
+              <div className="font-semibold mb-2 text-yellow-400">Give a clue to your team:</div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={clueWord}
+                  onChange={(e) => setClueWord(e.target.value)}
+                  placeholder="One word clue"
+                  aria-label="Clue word"
+                  className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500"
+                />
+                <input
+                  type="number"
+                  value={clueNumber}
+                  onChange={(e) => setClueNumber(parseInt(e.target.value) || 0)}
+                  min="0"
+                  max="9"
+                  aria-label="Number of related words"
+                  className="w-20 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white"
+                />
+                <button
+                  onClick={handleGiveClue}
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2 rounded-lg"
+                >
+                  Give Clue
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Game Board - 5x5 Grid */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-xl p-6 mb-6">
+          <div className="grid grid-cols-5 gap-3">
+            {game.board.map((card, index) => (
+              <button
+                key={index}
+                onClick={() => handleGuess(index)}
+                disabled={!canGuess || card.revealed}
+                className={`
+                  aspect-3/2 p-3 rounded-lg font-bold text-sm md:text-base
+                  border-2 transition-all
+                  ${getCardColor(card)}
+                  ${getCardOpacity(card)}
+                  ${!canGuess || card.revealed ? "cursor-default" : "hover:scale-105"}
+                `}
+              >
+                <div className="flex items-center justify-center h-full">
+                  {card.word}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Clue History */}
+        {game.clueHistory.length > 0 && (
+          <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-lg p-6">
+            <h3 className="font-bold text-lg mb-3 text-white">Clue History</h3>
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {game.clueHistory.slice().reverse().map((clue, index) => (
+                <div
+                  key={index}
+                  className={`p-2 rounded ${
+                    clue.team === "red" ? "bg-red-950/30" : "bg-blue-950/30"
+                  }`}
+                >
+                  <span className={clue.team === "red" ? "text-red-400" : "text-blue-400"}>
+                    {clue.team.toUpperCase()}:
+                  </span>{" "}
+                  <span className="font-bold text-white">{clue.word} {clue.number}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Chat Component */}
+      <Chat roomId={roomId} playerId={playerId} />
+    </div>
+  );
+}

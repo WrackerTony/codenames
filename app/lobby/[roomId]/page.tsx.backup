@@ -1,0 +1,255 @@
+"use client";
+
+import { useEffect, useState, use } from "react";
+import { useRouter } from "next/navigation";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+import LoadingSpinner from "@/app/components/LoadingSpinner";
+
+export default function LobbyPage({ params }: { params: Promise<{ roomId: string }> }) {
+  const router = useRouter();
+  const { roomId: roomIdString } = use(params);
+  const roomId = roomIdString as Id<"rooms">;
+  const [playerId, setPlayerId] = useState("");
+  const [selectedTeam, setSelectedTeam] = useState<
+    "red" | "blue" | "spectator" | undefined
+  >();
+  const [selectedRole, setSelectedRole] = useState<
+    "spymaster" | "operative" | undefined
+  >();
+
+  const roomData = useQuery(api.rooms.getRoom, roomId ? { roomId } : "skip");
+  const updateTeamRole = useMutation(api.rooms.updatePlayerTeamRole);
+  const startGame = useMutation(api.rooms.startGame);
+
+  useEffect(() => {
+    const id = localStorage.getItem("playerId");
+    if (!id) {
+      router.push("/");
+      return;
+    }
+    setPlayerId(id);
+  }, [router]);
+
+  useEffect(() => {
+    if (roomData?.room?.status === "playing") {
+      router.push(`/game/${roomId}`);
+    }
+  }, [roomData, roomId, router]);
+
+  if (!roomData) {
+    return <LoadingSpinner />;
+  }
+
+  const { room, players } = roomData;
+  const isHost = room.hostId === playerId;
+
+  const redTeam = players.filter((p) => p.team === "red");
+  const blueTeam = players.filter((p) => p.team === "blue");
+  const spectators = players.filter((p) => p.team === "spectator");
+  const unassigned = players.filter((p) => !p.team);
+
+  const redSpymaster = redTeam.find((p) => p.role === "spymaster");
+  const blueSpymaster = blueTeam.find((p) => p.role === "spymaster");
+
+  const canStart =
+    redTeam.length > 0 && blueTeam.length > 0 && redSpymaster && blueSpymaster;
+
+  const handleTeamRoleChange = async (
+    team: "red" | "blue" | "spectator",
+    role: "spymaster" | "operative"
+  ) => {
+    try {
+      await updateTeamRole({
+        playerId,
+        roomId,
+        team,
+        role,
+      });
+      setSelectedTeam(team);
+      setSelectedRole(role);
+    } catch (error) {
+      alert(
+        error instanceof Error ? error.message : "Failed to update team/role"
+      );
+    }
+  };
+
+  const handleStartGame = async () => {
+    try {
+      await startGame({ roomId, playerId });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to start game");
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-950 p-4">
+      <div className="max-w-6xl mx-auto">
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-8 mb-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold text-white">Lobby</h1>
+            <div className="text-right">
+              <div className="text-sm text-gray-400">Room Code</div>
+              <div className="text-3xl font-bold text-blue-400">
+                {room.code}
+              </div>
+              <div className="text-xs text-gray-500">
+                {room.isPublic ? "Public Room" : "Private Room"}
+              </div>
+            </div>
+          </div>
+
+          {!canStart && (
+            <div className="bg-yellow-900/30 border border-yellow-700/50 text-yellow-400 px-4 py-3 rounded-lg mb-6">
+              ⚠️ Both teams need at least one player and a spymaster to start
+              the game
+            </div>
+          )}
+
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            {/* Red Team */}
+            <div className="border-2 border-red-500/50 rounded-xl p-6 bg-red-950/20">
+              <h2 className="text-2xl font-bold text-red-400 mb-4">
+                🔴 Red Team ({redTeam.length})
+              </h2>
+              <div className="space-y-2 mb-4">
+                {redTeam.map((player) => (
+                  <div
+                    key={player._id}
+                    className="bg-gray-800 p-3 rounded-lg flex justify-between items-center"
+                  >
+                    <span className="font-medium text-white">{player.name}</span>
+                    <span className="text-sm px-3 py-1 bg-red-900/50 text-red-300 rounded-full">
+                      {player.role === "spymaster"
+                        ? "👑 Spymaster"
+                        : "🕵️ Operative"}
+                    </span>
+                  </div>
+                ))}
+                {redTeam.length === 0 && (
+                  <div className="text-gray-500 text-center py-4">
+                    No players yet
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <button
+                  onClick={() => handleTeamRoleChange("red", "spymaster")}
+                  disabled={!!redSpymaster}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Join as Spymaster {redSpymaster && "✓"}
+                </button>
+                <button
+                  onClick={() => handleTeamRoleChange("red", "operative")}
+                  className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                >
+                  Join as Operative
+                </button>
+              </div>
+            </div>
+
+            {/* Blue Team */}
+            <div className="border-2 border-blue-500/50 rounded-xl p-6 bg-blue-950/20">
+              <h2 className="text-2xl font-bold text-blue-400 mb-4">
+                🔵 Blue Team ({blueTeam.length})
+              </h2>
+              <div className="space-y-2 mb-4">
+                {blueTeam.map((player) => (
+                  <div
+                    key={player._id}
+                    className="bg-gray-800 p-3 rounded-lg flex justify-between items-center"
+                  >
+                    <span className="font-medium text-white">{player.name}</span>
+                    <span className="text-sm px-3 py-1 bg-blue-900/50 text-blue-300 rounded-full">
+                      {player.role === "spymaster"
+                        ? "👑 Spymaster"
+                        : "🕵️ Operative"}
+                    </span>
+                  </div>
+                ))}
+                {blueTeam.length === 0 && (
+                  <div className="text-gray-500 text-center py-4">
+                    No players yet
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <button
+                  onClick={() => handleTeamRoleChange("blue", "spymaster")}
+                  disabled={!!blueSpymaster}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Join as Spymaster {blueSpymaster && "✓"}
+                </button>
+                <button
+                  onClick={() => handleTeamRoleChange("blue", "operative")}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                >
+                  Join as Operative
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Unassigned Players */}
+          {unassigned.length > 0 && (
+            <div className="border-2 border-gray-700 rounded-xl p-4 mb-6 bg-gray-800/50">
+              <h3 className="font-bold text-gray-300 mb-2">
+                Unassigned Players ({unassigned.length})
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {unassigned.map((player) => (
+                  <span
+                    key={player._id}
+                    className="px-3 py-1 bg-gray-700 border border-gray-600 rounded-full text-sm text-gray-200"
+                  >
+                    {player.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Spectators */}
+          {spectators.length > 0 && (
+            <div className="border-2 border-gray-700 rounded-xl p-4 mb-6 bg-gray-800/50">
+              <h3 className="font-bold text-gray-300 mb-2">
+                Spectators ({spectators.length})
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {spectators.map((player) => (
+                  <span
+                    key={player._id}
+                    className="px-3 py-1 bg-gray-700 border border-gray-600 rounded-full text-sm text-gray-200"
+                  >
+                    {player.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Start Game Button */}
+          {(isHost || room.isPublic) && (
+            <button
+              onClick={handleStartGame}
+              disabled={!canStart}
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-xl text-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isHost ? "Start Game" : "Ready to Start"}
+            </button>
+          )}
+
+          {!isHost && !room.isPublic && (
+            <div className="text-center text-gray-400">
+              Waiting for host to start the game...
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
